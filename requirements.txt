@@ -1,0 +1,6 @@
+pandas~=1.2.5
+numpy~=1.19.5
+Keras~=2.4.3
+tensorflow~=2.5.0
+Flask~=2.0.1
+Flask-Cors~=3.0.10

@@ -1,6 +1,5 @@
 import numpy as np
-from keras.models import load_model
-import json
+from tensorflow.keras.models import load_model
 import pandas as pd
 
 # Function to preprocess the information that will be loaded in the model

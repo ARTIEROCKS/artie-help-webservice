@@ -14,7 +14,7 @@ def predict():
 
         # Get the data and searches for the student interactions
         elements = request.data
-        student_interactions = queue_service.get_student_interactions(elements)
+        student_interactions, client = queue_service.get_student_interactions(elements)
 
         # Once we have the interactions of the student, we transform the data to get a valid array
         df = preprocess.data_transformation(student_interactions["interactions"])
@@ -28,7 +28,6 @@ def predict():
         # Searches if there if the help must be shown
         help = 1 in prediction_int
         help_object = "{show_help: " + str(int(help)) + "}"
-        print(help_object)
 
         return help_object
 

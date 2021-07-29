@@ -1,6 +1,4 @@
-import csv
 import json
-import sys
 from datetime import datetime
 
 
@@ -8,15 +6,14 @@ from datetime import datetime
 import pandas as pd
 
 
-def loadjsondata(json_data):
+def sort(json_data):
 
-    data = json.loads(json_data)
-    sortedData = sorted(data, key=lambda x: (x['student']['_id'], x['lastLogin'], x['dateTime']))
-    return sortedData
+    sorted_data = sorted(json_data, key=lambda x: (x['student']['_id'], x['lastLogin'], x['dateTime']))
+    return sorted_data
 
 
 # Function to get the first actions of the exercise
-def getfirstaction(interventions):
+def get_first_action(interventions):
 
     first_actions = {}
     student_id = None
@@ -46,7 +43,7 @@ def getfirstaction(interventions):
 
 
 # Function to write the software interventions in dataframe format
-def writepedagogicalsoftwareinterventionsdf(interventions, first_actions):
+def write_pedagogical_software_interventions_df(interventions, first_actions):
 
     df_list = []
 
@@ -200,15 +197,16 @@ def writepedagogicalsoftwareinterventionsdf(interventions, first_actions):
     return pd.DataFrame(df_list)
 
 
+# Function to transform the received data
 def data_transformation(json_data):
 
-    # 1- Gets the json data
-    data = loadjsondata(json_data)
+    # 1- Sorts the information
+    data = sort(json_data)
 
     # 2- Get the first action of each exercise
-    actions = getfirstaction(data)
+    actions = get_first_action(data)
 
     # 3- Creating the dataframe
-    df = writepedagogicalsoftwareinterventionsdf(data, actions)
+    df = write_pedagogical_software_interventions_df(data, actions)
 
     return df

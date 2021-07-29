@@ -1,8 +1,7 @@
 from flask import Flask
 from flask import request
 from flask_cors import CORS
-import preprocess
-import model
+from service import preprocess, model, queue_service
 import numpy as np
 
 app = Flask(__name__)
@@ -13,13 +12,15 @@ CORS(app)
 def predict():
     if request.method == "POST":
 
-        # Get the data and preprocess the data
+        # Get the data and searches for the student interactions
         elements = request.data
-        df = preprocess.data_transformation(elements)
+        student_interactions = queue_service.get_student_interactions(elements)
+
+        # Once we have the interactions of the student, we transform the data to get a valid array
+        df = preprocess.data_transformation(student_interactions["interactions"])
 
         # Predicts the output
         prediction = model.predict("model/help_model.h5", "model/selectedfeatures.csv", df)
-        print(prediction)
 
         # Round the prediction to integers
         prediction_int = np.rint(prediction)

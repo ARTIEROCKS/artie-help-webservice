@@ -27,7 +27,7 @@ def predict():
 
         # Searches if there if the help must be shown
         help = 1 in prediction_int
-        help_object = "{show_help: " + str(int(help)) + "}"
+        help_object = "{body: { object: " + str(int(help)) + "}}"
 
         return help_object
 

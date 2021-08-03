@@ -6,8 +6,8 @@ COPY requirements.txt requirements.txt
 RUN pip3 install -r requirements.txt
 
 ADD model model
-COPY service/preprocess.py preprocess.py
-COPY service/model.py model.py
+ADD service service
+ADD repository repository
 COPY app.py app.py
 
 EXPOSE 5000

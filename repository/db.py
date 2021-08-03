@@ -7,8 +7,10 @@ def db_client():
     mongo_host = os.environ["APP_MONGO_HOST"]
     mongo_user = os.environ["APP_MONGO_USER"]
     mongo_password = os.environ["APP_MONGO_PASS"]
+    mongo_port = os.environ["APP_MONGO_PORT"]
+    mongo_db = os.environ["APP_MONGO_DB"]
 
-    return pymongo.MongoClient("mongodb://" + mongo_user + ":" + mongo_password + "@" + mongo_host + ":27017/artie")
+    return pymongo.MongoClient("mongodb://" + mongo_user + ":" + mongo_password + "@" + mongo_host + ":" + mongo_port + "/" + mongo_db)
 
 
 class Database:

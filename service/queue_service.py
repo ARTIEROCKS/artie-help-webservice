@@ -20,10 +20,16 @@ def create_new_interaction_object(new_data, is_array=False):
     element = new_data[0] if is_array else new_data
 
     if "student" in element:
-        student_id = element["student"]["_id"]
+        if "_id" in element["student"]:
+            student_id = element["student"]["_id"]
+        elif "id" in element["student"]:
+            student_id = element["student"]["id"]
 
     if "exercise" in element:
-        exercise_id = element["exercise"]["_id"]
+        if "_id" in element["exercise"]:
+            exercise_id = element["exercise"]["_id"]
+        elif "id" in element["exercise"]:
+            exercise_id = element["exercise"]["id"]
 
     if "lastLogin" in element:
         last_login = element["lastLogin"]
@@ -55,9 +61,15 @@ def get_student_interactions(new_data, client=None):
     element = new_data[0] if is_array else new_data
 
     if "student" in element:
-        new_data_student_id = element["student"]["_id"]
+        if "_id" in element["student"]:
+            new_data_student_id = element["student"]["_id"]
+        elif "id" in element["student"]:
+            new_data_student_id = element["student"]["id"]
     if "exercise" in element:
-        new_data_exercise_id = element["exercise"]["_id"]
+        if "_id" in element["exercise"]:
+            new_data_exercise_id = element["exercise"]["_id"]
+        elif "id" in element["exercise"]:
+            new_data_exercise_id = element["exercise"]["id"]
     if "lastLogin" in element:
         new_data_last_login = element["lastLogin"]
 

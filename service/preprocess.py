@@ -8,7 +8,19 @@ import pandas as pd
 
 def sort(json_data):
 
-    sorted_data = sorted(json_data, key=lambda x: (x['student']['_id'], x['lastLogin'], x['dateTime']))
+    is_underscore_id = True
+    if len(json_data) > 0:
+        if 'student' in json_data[0]:
+            if '_id' in json_data[0]['student']:
+                is_underscore_id = True
+            else:
+                is_underscore_id = False
+
+    if is_underscore_id:
+        sorted_data = sorted(json_data, key=lambda x: (x['student']['_id'], x['lastLogin'], x['dateTime']))
+    else:
+        sorted_data = sorted(json_data, key=lambda x: (x['student']['id'], x['lastLogin'], x['dateTime']))
+
     return sorted_data
 
 
@@ -24,6 +36,8 @@ def get_first_action(interventions):
         if 'student' in element:
             if '_id' in element['student']:
                 student_id = element['student']['_id']
+            elif 'id' in element['student']:
+                student_id = element['student']['id']
         if 'dateTime' in element:
             date_time = datetime.strptime(element['dateTime'], '%Y-%m-%d %H:%M:%S.%f')
         if 'lastLogin' in element:
@@ -31,6 +45,8 @@ def get_first_action(interventions):
         if 'exercise' in element:
             if '_id' in element['exercise']:
                 exercise_id = element['exercise']['_id']
+            elif 'id' in element['exercise']:
+                exercise_id = element['exercise']['id']
 
         if student_id is not None and date_time is not None and last_login is not None and exercise_id is not None:
             if student_id + '_' + exercise_id + '_' + last_login in first_actions.keys():
@@ -85,10 +101,14 @@ def write_pedagogical_software_interventions_df(interventions, first_actions):
         if 'student' in element:
             if '_id' in element['student']:
                 student_id = element['student']['_id']
+            elif 'id' in element['student']:
+                student_id = element['student']['id']
 
         if 'exercise' in element:
             if '_id' in element['exercise']:
                 exercise_id = element['exercise']['_id']
+            elif 'id' in element['exercise']:
+                exercise_id = element['exercise']['id']
 
         if 'lastLogin' in element:
             last_login = element['lastLogin']

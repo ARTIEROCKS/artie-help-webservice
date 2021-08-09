@@ -112,12 +112,13 @@ def write_pedagogical_software_interventions_df(interventions, first_actions):
                 exercise_id = element['exercise']['id']
 
         if 'lastLogin' in element:
-            last_login = element['lastLogin']
+            last_login = element['lastLogin'].replace('T', ' ')
 
         # Time calculation between the first action of the exercise and the current action
         if student_id is not None and last_login is not None and exercise_id is not None:
             if student_id + '_' + exercise_id + '_' + last_login in first_actions.keys():
                 if 'dateTime' in element:
+                    element['dateTime'] = element['dateTime'].replace('T', ' ')
                     date_time_obj = datetime.strptime(element['dateTime'], '%Y-%m-%d %H:%M:%S.%f')
                     first_action = first_actions[student_id + '_' + exercise_id + '_' + last_login]
                     difference = (date_time_obj - first_action)

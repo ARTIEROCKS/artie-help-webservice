@@ -48,11 +48,11 @@ def predict():
 
             # Searches if there if the help must be shown
             help = 1 in prediction_int
-            help_object = "{\"body\": {\"message\": null, \"object\": " + str(int(help)) + "}}"
+            help_object = "{\"body\": {\"message\": \"OK\", \"object\": " + str(int(help)) + "}}"
 
         else:
             # If there are no predictions, we return the errors
-            help_object = "{\"body\": {\"message\": \"" + error_message + "\", \"object\": null }}"
+            help_object = "{\"body\": {\"message\": \"ERROR\", \"object\": \"" + error_message + "\"}}"
 
         return help_object
 

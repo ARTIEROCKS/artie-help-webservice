@@ -39,6 +39,7 @@ def get_first_action(interventions):
             elif 'id' in element['student']:
                 student_id = element['student']['id']
         if 'dateTime' in element:
+            element['dateTime'] = element['dateTime'].replace('T', ' ')
             date_time = datetime.strptime(element['dateTime'], '%Y-%m-%d %H:%M:%S.%f')
         if 'lastLogin' in element:
             last_login = element['lastLogin']

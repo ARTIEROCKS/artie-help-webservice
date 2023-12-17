@@ -1,5 +1,5 @@
 import numpy as np
-from tensorflow.keras.models import load_model
+from tensorflow.keras.saving import load_model
 import pandas as pd
 
 

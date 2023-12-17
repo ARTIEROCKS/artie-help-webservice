@@ -59,7 +59,7 @@ def predict():
 
         if prediction_int is not None:
 
-            # Searches if there if the help must be shown
+            # Searches if the help must be shown
             help = 1 in prediction_int
             help_object = "{\"body\": {\"message\": \"OK\", \"object\": " + str(int(help)) + "}}"
 

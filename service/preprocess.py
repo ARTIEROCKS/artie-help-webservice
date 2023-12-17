@@ -1,13 +1,9 @@
-import json
 from datetime import datetime
-
-
-# Function to load the json data
 import pandas as pd
 
 
+# Function to load the json data
 def sort(json_data):
-
     is_underscore_id = True
     if len(json_data) > 0:
         if 'student' in json_data[0]:
@@ -26,7 +22,6 @@ def sort(json_data):
 
 # Function to get the first actions of the exercise
 def get_first_action(interventions):
-
     first_actions = {}
     student_id = None
     date_time = None
@@ -61,7 +56,6 @@ def get_first_action(interventions):
 
 # Function to write the software interventions in dataframe format
 def write_pedagogical_software_interventions_df(interventions, first_actions):
-
     df_list = []
 
     for element in interventions:
@@ -221,7 +215,6 @@ def write_pedagogical_software_interventions_df(interventions, first_actions):
 
 # Function to transform the received data
 def data_transformation(json_data):
-
     # 1- Sorts the information
     data = sort(json_data)
 

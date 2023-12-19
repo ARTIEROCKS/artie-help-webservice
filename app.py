@@ -3,6 +3,7 @@ from flask import request
 from flask_cors import CORS
 from service import preprocess, model, queue_service
 import numpy as np
+import logging
 
 app = Flask(__name__)
 CORS(app)
@@ -12,47 +13,61 @@ CORS(app)
 def predict():
     if request.method == "POST":
 
+        logging.info("New help model prediction requested by API REST")
+
         error_message = ""
         student_interactions = None
         df = None
         prediction_int = None
 
         try:
+
+            logging.info("Predict - get_student_interactions")
+
             # Get the data and searches for the student interactions
             elements = request.data
             student_interactions, client = queue_service.get_student_interactions(elements)
-        except:
-            error_message = "Error: Predict - get_student_interactions"
-            print("Error: Predict - get_student_interactions")
+        except Exception as ex:
+            error_message = "Error: Predict - get_student_interactions: " + str(ex)
+            logging.error("Error: Predict - get_student_interactions: " + str(ex))
+            print("Error: Predict - get_student_interactions: " + str(ex))
 
         try:
             if student_interactions is not None:
+                logging.info("Predict - data_transformation")
+
                 # Once we have the interactions of the student, we transform the data to get a valid array
                 df = preprocess.data_transformation(student_interactions["interactions"])
-        except:
-            error_message = error_message + " | Error: Predict - data_transformation"
-            print("Error: Predict - data_transformation")
+        except Exception as ex:
+            error_message = error_message + " | Error: Predict - data_transformation: " + str(ex)
+            logging.error("Error: Predict - data_transformation: " + str(ex))
+            print("Error: Predict - data_transformation: " + str(ex))
 
         try:
             if df is not None:
+                logging.info("Predict - prediction")
+
                 # Predicts the output
                 prediction = model.predict("model/help_model.h5", "model/selectedfeatures.csv", df)
 
                 # Round the prediction to integers
                 prediction_int = np.rint(prediction)
-        except:
-            error_message = error_message + " | Error: Predict - prediction"
-            print("Error: Predict - prediction")
+        except Exception as ex:
+            error_message = error_message + " | Error: Predict - prediction: " + str(ex)
+            logging.error("Error: Predict - prediction: " + str(ex))
+            print("Error: Predict - prediction: " + str(ex))
 
         if prediction_int is not None:
 
-            # Searches if there if the help must be shown
+            # Searches if the help must be shown
             help = 1 in prediction_int
             help_object = "{\"body\": {\"message\": \"OK\", \"object\": " + str(int(help)) + "}}"
 
         else:
             # If there are no predictions, we return the errors
             help_object = "{\"body\": {\"message\": \"ERROR\", \"object\": \"" + error_message + "\"}}"
+
+        logging.info("API Rest response: " + help_object)
 
         return help_object
 

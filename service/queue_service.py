@@ -1,4 +1,5 @@
 import json
+import logging
 from repository.db import Database
 
 
@@ -48,7 +49,11 @@ def create_new_interaction_object(new_data, is_array=False):
 
 # Function to get all the user interactions from the database
 def get_student_interactions(new_data, client=None):
+
+    logging.info("Getting the student interactions")
+
     # 1- Transforms the txt_json into json
+    logging.debug("Transforming the txt into a json")
     new_data = load_json_data(new_data)
 
     # 2- Extracting the new_data information
@@ -74,6 +79,7 @@ def get_student_interactions(new_data, client=None):
         new_data_last_login = element["lastLogin"]
 
     # 2- Searches the information about the student
+    logging.debug("Getting information from DB of student id: " + new_data_student_id)
     db = Database()
     student_query = {"student_id": new_data_student_id}
     document, client = db.search(student_query, client)
@@ -94,6 +100,7 @@ def get_student_interactions(new_data, client=None):
             else:
                 interactions.append(new_data)
 
+            logging.debug("Updating the document ID: " + document["_id"])
             new_values = {"interactions": interactions}
             query = {"_id": document["_id"]}
             result, client = db.update(query, new_values, client)
@@ -101,15 +108,18 @@ def get_student_interactions(new_data, client=None):
         # 3.2- If the data are not the same, we first delete the current information and we insert a new document
         else:
             # 3.2.1- Deletes the document
+            logging.debug("Deleting the document ID: " + document["_id"])
             query = {"_id": document["_id"]}
             result, client = db.delete(query, client)
 
             # 3.2.2- Creates a new document to be inserted
+            logging.debug("Creating new interaction object")
             document = create_new_interaction_object(new_data, is_array)
             result, client = db.insert(document, client)
 
     else:
         # 4- If the data does not exist, we insert a new document
+        logging.debug("Inserting the document in DB the data of student id: " + new_data_student_id)
         document = create_new_interaction_object(new_data, is_array)
         result, client = db.insert(document, client)
 

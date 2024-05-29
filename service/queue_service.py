@@ -79,7 +79,7 @@ def get_student_interactions(new_data, client=None):
         new_data_last_login = element["lastLogin"]
 
     # 2- Searches the information about the student
-    logging.debug("Getting information from DB of student id: " + new_data_student_id)
+    logging.debug("Getting information from DB of student id: " + str(new_data_student_id))
     db = Database()
     student_query = {"student_id": new_data_student_id}
     document, client = db.search(student_query, client)
@@ -100,7 +100,7 @@ def get_student_interactions(new_data, client=None):
             else:
                 interactions.append(new_data)
 
-            logging.debug("Updating the document ID: " + document["_id"])
+            logging.debug("Updating the document ID: " + str(document["_id"]))
             new_values = {"interactions": interactions}
             query = {"_id": document["_id"]}
             result, client = db.update(query, new_values, client)
@@ -108,7 +108,7 @@ def get_student_interactions(new_data, client=None):
         # 3.2- If the data are not the same, we first delete the current information and we insert a new document
         else:
             # 3.2.1- Deletes the document
-            logging.debug("Deleting the document ID: " + document["_id"])
+            logging.debug("Deleting the document ID: " + str(document["_id"]))
             query = {"_id": document["_id"]}
             result, client = db.delete(query, client)
 
@@ -119,7 +119,7 @@ def get_student_interactions(new_data, client=None):
 
     else:
         # 4- If the data does not exist, we insert a new document
-        logging.debug("Inserting the document in DB the data of student id: " + new_data_student_id)
+        logging.debug("Inserting the document in DB the data of student id: " + str(new_data_student_id))
         document = create_new_interaction_object(new_data, is_array)
         result, client = db.insert(document, client)
 

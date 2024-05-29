@@ -29,8 +29,8 @@ def predict():
             student_interactions, client = queue_service.get_student_interactions(elements)
         except Exception as ex:
             error_message = "Error: Predict - get_student_interactions: " + str(ex)
-            logging.error("Error: Predict - get_student_interactions: " + str(ex))
-            print("Error: Predict - get_student_interactions: " + str(ex))
+            logging.error(error_message)
+            print(error_message)
 
         try:
             if student_interactions is not None:
@@ -40,8 +40,8 @@ def predict():
                 df = preprocess.data_transformation(student_interactions["interactions"])
         except Exception as ex:
             error_message = error_message + " | Error: Predict - data_transformation: " + str(ex)
-            logging.error("Error: Predict - data_transformation: " + str(ex))
-            print("Error: Predict - data_transformation: " + str(ex))
+            logging.error(error_message)
+            print(error_message)
 
         try:
             if df is not None:
@@ -54,8 +54,8 @@ def predict():
                 prediction_int = np.rint(prediction)
         except Exception as ex:
             error_message = error_message + " | Error: Predict - prediction: " + str(ex)
-            logging.error("Error: Predict - prediction: " + str(ex))
-            print("Error: Predict - prediction: " + str(ex))
+            logging.error(error_message)
+            print(error_message)
 
         if prediction_int is not None:
 

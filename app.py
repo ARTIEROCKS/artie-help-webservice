@@ -67,7 +67,7 @@ def predict():
             # If there are no predictions, we return the errors
             help_object = "{\"body\": {\"message\": \"ERROR\", \"object\": \"" + error_message + "\"}}"
 
-        logging.info("API Rest response: " + help_object)
+        logging.info("API Rest response: " + str(help_object))
 
         return help_object
 

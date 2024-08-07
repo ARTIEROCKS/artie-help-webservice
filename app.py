@@ -60,8 +60,8 @@ def predict():
         if prediction_int is not None:
 
             # Searches if the help must be shown
-            help = 1 in prediction_int
-            help_object = "{\"body\": {\"message\": \"OK\", \"object\": " + str(int(help)) + "}}"
+            help_needed = 1 in prediction_int
+            help_object = "{\"body\": {\"message\": \"OK\", \"object\": " + str(int(help_needed)) + "}}"
 
         else:
             # If there are no predictions, we return the errors

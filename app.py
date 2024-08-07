@@ -14,6 +14,7 @@ def predict():
     if request.method == "POST":
 
         logging.info("New help model prediction requested by API REST")
+        print("New help model prediction requested by API REST")
 
         error_message = ""
         student_interactions = None
@@ -23,6 +24,7 @@ def predict():
         try:
 
             logging.info("Predict - get_student_interactions")
+            print("Predict - get_student_interactions")
 
             # Get the data and searches for the student interactions
             elements = request.data
@@ -35,6 +37,7 @@ def predict():
         try:
             if student_interactions is not None:
                 logging.info("Predict - data_transformation")
+                print("Predict - data_transformation")
 
                 # Once we have the interactions of the student, we transform the data to get a valid array
                 df = preprocess.data_transformation(student_interactions["interactions"])
@@ -46,6 +49,7 @@ def predict():
         try:
             if df is not None:
                 logging.info("Predict - prediction")
+                print("Predict - prediction")
 
                 # Predicts the output
                 prediction = model.predict("model/help_model.h5", "model/selectedfeatures.csv", df)
@@ -68,6 +72,7 @@ def predict():
             help_object = "{\"body\": {\"message\": \"ERROR\", \"object\": \"" + error_message + "\"}}"
 
         logging.info("API Rest response: " + str(help_object))
+        print("API Rest response: " + str(help_object))
 
         return help_object
 

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 import pandas as pd
 
@@ -34,8 +35,13 @@ def get_first_action(interventions):
             elif 'id' in element['student']:
                 student_id = element['student']['id']
         if 'dateTime' in element:
-            element['dateTime'] = element['dateTime'].replace('T', ' ')
-            date_time = datetime.strptime(element['dateTime'], '%Y-%m-%d %H:%M:%S.%f')
+            try:
+                element['dateTime'] = element['dateTime'].replace('T', ' ')
+                element['dateTime'] = element['dateTime'][:26]
+                date_time = datetime.strptime(element['dateTime'], '%Y-%m-%d %H:%M:%S.%f')
+            except Exception as ex:
+                logging.error(str(ex))
+                print(str(ex))
         if 'lastLogin' in element:
             last_login = element['lastLogin']
         if 'exercise' in element:
@@ -113,6 +119,7 @@ def write_pedagogical_software_interventions_df(interventions, first_actions):
             if student_id + '_' + exercise_id + '_' + last_login in first_actions.keys():
                 if 'dateTime' in element:
                     element['dateTime'] = element['dateTime'].replace('T', ' ')
+                    element['dateTime'] = element['dateTime'][:26]
                     date_time_obj = datetime.strptime(element['dateTime'], '%Y-%m-%d %H:%M:%S.%f')
                     first_action = first_actions[student_id + '_' + exercise_id + '_' + last_login]
                     difference = (date_time_obj - first_action)

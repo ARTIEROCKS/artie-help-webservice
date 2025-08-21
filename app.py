@@ -1,12 +1,50 @@
 from flask import Flask
 from flask import request
 from flask_cors import CORS
-from service import preprocess, model, queue_service
+from service import preprocess, model, queue_service  # restored queue_service import
 import numpy as np
 import logging
+import tensorflow as tf  # added for early model load
+import os
 
 app = Flask(__name__)
 CORS(app)
+
+# --- Model readiness state (English comments) ---
+MODEL_PATH = "model/help_model.h5"
+_model_loaded = False
+_model_error = None
+
+
+def _load_model_once():
+    """Load the model once at startup to declare readiness for /health."""
+    global _model_loaded, _model_error
+    if _model_loaded:  # already loaded
+        return
+    try:
+        if not os.path.exists(MODEL_PATH):
+            _model_error = f"Model file not found at {MODEL_PATH}"
+            return
+        # Attempt to load (discard the object; predict() will still use existing logic)
+        tf.keras.saving.load_model(MODEL_PATH)
+        _model_loaded = True
+        _model_error = None
+    except Exception as ex:
+        _model_error = str(ex)
+        _model_loaded = False
+
+
+# Early load at import time
+_load_model_once()
+
+
+@app.route('/health', methods=['GET'])
+def health():
+    """Return 200 only when model was successfully loaded at startup."""
+    if _model_loaded:
+        return {"status": "ok"}, 200
+    # Not ready yet / failed
+    return {"status": "not_ready", "error": _model_error}, 503
 
 
 @app.route('/api/v1/help-model/predict', methods=['POST'])
@@ -78,4 +116,4 @@ def predict():
 
 
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port="5000")
+    app.run(debug=False, host="0.0.0.0", port="8080")

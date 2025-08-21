@@ -1,29 +1,23 @@
-FROM python:3.9-slim-bullseye
+FROM python:3.11-slim-bookworm
 
-# Instalar bibliotecas necesarias para OpenGL y ffmpeg
-RUN apt-get update && apt-get install -y \
-    gcc-10 g++-10 \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100 \
-    && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 100
-
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libhdf5-dev
+# Instalar dependencias de compilación mínimas (grpcio puede necesitar build-essential si no hay wheel)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libhdf5-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY requirements.txt requirements.txt
-RUN pip3 install --upgrade pip setuptools wheel
-RUN pip3 install --no-binary=h5py h5py
-RUN pip3 install -r requirements.txt
+RUN pip install --upgrade pip setuptools wheel
+# Instala dependencias
+RUN pip install -r requirements.txt
 
 ADD model model
 ADD service service
 ADD repository repository
 COPY app.py app.py
 
-EXPOSE 5000
+EXPOSE 8080
 
-CMD [ "python3", "app.py", "--host=0.0.0.0", "--port=5000"]
+CMD [ "python", "app.py", "--host=0.0.0.0", "--port=8080" ]

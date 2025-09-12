@@ -1,29 +1,29 @@
 # Help Webservice
 
-Servicio Flask para inferencia del modelo de ayuda (help_model.h5/.keras) con endpoints de predicción y health para probes, listo para ejecutarse en Python 3.11 y Docker.
+Flask service for inference of a help recommendation model (help_model.h5/.keras), with prediction and health endpoints, ready for Python 3.11 and Docker.
 
-## Características
+## Features
 - Python 3.11, Flask 3.
-- TensorFlow/Keras 2.15 con capas personalizadas registradas en `lib/keras_custom_layers.py`.
+- TensorFlow/Keras 2.15 with custom layers registered in `lib/keras_custom_layers.py`.
 - Endpoints:
-  - `GET /health` — OK cuando el modelo `model/help_model.h5` está cargado correctamente al arrancar.
-  - `POST /api/v1/help-model/predict` — recibe interacciones del estudiante y devuelve si se debe mostrar ayuda.
-- Dockerfile con healthcheck nativo (curl -> `/health`).
+  - `GET /health` — returns OK only when the model `model/help_model.h5` was successfully loaded at startup.
+  - `POST /api/v1/help-model/predict` — receives student interactions and returns whether help should be shown.
+- Dockerfile includes a native HEALTHCHECK that probes `/health`.
 
-## Requisitos
-- Archivo de modelo en `model/help_model.h5` (incluido en el repo junto a variantes `.keras`).
-- Python 3.11 (para ejecución local) o Docker.
-- Para el endpoint de predicción: acceso a MongoDB y variables de entorno configuradas.
+## Requirements
+- Model file at `model/help_model.h5` (present in the repo; `.keras` variants are also included).
+- Python 3.11 (for local runs) or Docker.
+- For the prediction endpoint: access to MongoDB and environment variables set.
 
-### Variables de entorno (MongoDB)
-El servicio de predicción usa MongoDB a través de `repository/db.py` y requiere:
+### Environment variables (MongoDB)
+The prediction flow reads/writes interactions via Mongo using `repository/db.py` and requires:
 - `APP_MONGO_HOST`
 - `APP_MONGO_PORT`
 - `APP_MONGO_USER`
 - `APP_MONGO_PASS`
 - `APP_MONGO_DB`
 
-Ejemplo (bash):
+Example (bash):
 ```bash
 export APP_MONGO_HOST=localhost
 export APP_MONGO_PORT=27017
@@ -32,19 +32,19 @@ export APP_MONGO_PASS=mypass
 export APP_MONGO_DB=artie
 ```
 
-## Arranque rápido
+## Quick start
 
-### Opción A: Docker (recomendada)
-1) Construir imagen
+### A) Docker (recommended)
+1) Build the image
 ```bash
 docker build -t help-webservice .
 ```
-2) Ejecutar el contenedor (con probe de health incorporado)
-- Solo health (sin dependencia de Mongo):
+2) Run the container
+- Health-only (Mongo not required):
 ```bash
 docker run -d --name help-webservice -p 8080:8080 help-webservice
 ```
-- Con predicción (requiere Mongo y variables):
+- With prediction (requires Mongo and env vars):
 ```bash
 docker run -d --name help-webservice \
   -p 8080:8080 \
@@ -55,45 +55,57 @@ docker run -d --name help-webservice \
   -e APP_MONGO_DB=artie \
   help-webservice
 ```
-3) Probar health
+3) Probe health
 ```bash
 curl -i http://localhost:8080/health
 ```
-Debería responder `200 {"status":"ok"}` cuando el modelo esté cargado.
+You should get `200 {"status":"ok"}` once the model is loaded.
 
-Estado de salud del contenedor (Docker):
+Container health status (Docker):
 ```bash
 docker ps --filter name=help-webservice --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 ```
 
-### Opción B: Local (venv)
-1) Crear y activar entorno
+### B) Local (venv)
+1) Create and activate a virtual environment
 ```bash
 python -m venv venv
 source venv/bin/activate
 ```
-2) Instalar dependencias
+2) Install dependencies
 ```bash
 pip install -r requirements.txt
 ```
-Notas:
-- En macOS, se instalará `tensorflow-macos` (y `tensorflow-metal` en Apple Silicon) automáticamente por los marcadores en `requirements.txt`.
-- En Linux se instalará `tensorflow==2.15.0`.
+Notes:
+- On macOS, `tensorflow-macos` (and `tensorflow-metal` on Apple Silicon) will be installed automatically via markers in `requirements.txt`.
+- On Linux, `tensorflow==2.15.0` will be installed.
 
-3) Lanzar el servicio
+3) Run the service
 ```bash
 python app.py
 ```
-4) Probar health
+4) Probe health
 ```bash
 curl -i http://localhost:8080/health
 ```
 
-## Uso del endpoint de predicción
-- URL: `POST /api/v1/help-model/predict`
-- Body (application/json): lista de interacciones. Campos mínimos esperados por el preprocesado: `student.id` (o `student._id`), `exercise.id` (o `exercise._id`), `lastLogin`, `dateTime`.
+### Debug mode (local)
+Use Flask’s debug server with live reload:
+```bash
+export FLASK_APP=app.py
+flask --app app --debug run -h 0.0.0.0 -p 8080
+```
+If you see the model loading twice on startup (due to the reloader), run without the reloader:
+```bash
+flask --app app --debug run --no-reload -h 0.0.0.0 -p 8080
+```
 
-Ejemplo:
+## Prediction API
+- URL: `POST /api/v1/help-model/predict`
+- Content-Type: `application/json`
+- Body: list of interaction objects. Minimal fields used by the preprocessor: `student.id` (or `student._id`), `exercise.id` (or `exercise._id`), `lastLogin`, `dateTime`.
+
+Example:
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/help-model/predict \
   -H 'Content-Type: application/json' \
@@ -105,41 +117,40 @@ curl -s -X POST http://localhost:8080/api/v1/help-model/predict \
     "requestHelp": false
   }]'
 ```
-Respuesta (string JSON con envoltorio `body`):
+Response (stringified JSON with a `body` wrapper):
 ```
 {"body": {"message": "OK", "object": 0}}
 ```
-`object` es 1 si se debe mostrar ayuda; 0 en caso contrario.
+`object` is 1 when help should be shown; otherwise 0.
 
-## Estructura del proyecto
+## Project structure
 ```
-app.py                     # Flask app, endpoints /health y /predict
+app.py                     # Flask app, endpoints /health and /predict
 service/
-  preprocess.py            # Transformaciones de datos
-  model.py                 # Carga del modelo y predicción
-  queue_service.py         # Obtención/actualización de interacciones en Mongo
+  preprocess.py            # Data transformations
+  model.py                 # Model loading and prediction
+  queue_service.py         # Fetch/update interactions in Mongo
 repository/
-  db.py                    # Cliente y operaciones Mongo (lee variables de entorno)
+  db.py                    # Mongo client and ops (reads env vars)
 lib/
-  keras_custom_layers.py   # Capas/funciones Keras personalizadas registradas
+  keras_custom_layers.py   # Registered custom Keras layers/functions
 model/
-  help_model.h5            # Modelo principal usado por defecto
-  selectedfeatures.csv     # CSV con columnas esperadas por el modelo
+  help_model.h5            # Default model
+  selectedfeatures.csv     # CSV with expected input columns
 ```
 
-## Notas de compatibilidad
+## Compatibility notes
 - Python 3.11.
 - TensorFlow/Keras 2.15.
-- `requirements.txt` fija versiones que evitan compilaciones nativas problemáticas en Py3.11 (p. ej. `grpcio`, `PyYAML`, `wrapt`).
-- En `app.py` se importan las funciones de `lib/keras_custom_layers.py` para que la deserialización del modelo con objetos personalizados funcione sin `custom_objects` explícito.
+- `requirements.txt` pins versions that avoid problematic native builds on Py3.11 (`grpcio==1.62.2`, `PyYAML==6.0.2`, `wrapt==1.14.1`).
+- In `app.py`, custom objects are imported from `lib/keras_custom_layers.py` so model deserialization works without providing a `custom_objects` dict at call sites.
 
 ## Troubleshooting
-- `ImportError: cannot import name 'formatargspec' from 'inspect'` — usar `wrapt==1.14.1` (ya fijado en requirements) en lugar de versiones antiguas.
-- Fallo compilando `grpcio` o `PyYAML` — se usan versiones con wheels para Py3.11 (`grpcio==1.62.2`, `PyYAML==6.0.2`).
-- `/health` devuelve 503 — asegurar que `model/help_model.h5` existe y es legible; revisar logs del contenedor o consola.
-- Predicción falla por conexión a DB — exportar variables de entorno de Mongo y que la instancia sea accesible.
+- `ImportError: cannot import name 'formatargspec' from 'inspect'` — use `wrapt==1.14.1` (already pinned) instead of older versions.
+- Build failures for `grpcio` or `PyYAML` — the pinned versions ship wheels for Py3.11.
+- `/health` returns 503 — ensure `model/help_model.h5` exists and is readable; check container logs or console.
+- Prediction fails due to DB connection — export Mongo env vars and ensure the instance is reachable.
 
-## pyproject.toml (gestión moderna)
-- Define el sistema de build moderno (`setuptools` + `wheel`) y metadatos del proyecto para Python >= 3.11.
-- Las dependencias de runtime se mantienen en `requirements.txt` para flujos sencillos (pip/Docker). El proyecto está listo para migrar a dependencias declarativas en `pyproject.toml` si se desea en el futuro.
-
+## pyproject.toml (modern build)
+- Declares the modern build system (`setuptools` + `wheel`) and basic project metadata for Python >= 3.11.
+- Runtime dependencies remain in `requirements.txt` for simple pip/Docker flows. You can migrate to declarative dependencies in `pyproject.toml` later if desired.

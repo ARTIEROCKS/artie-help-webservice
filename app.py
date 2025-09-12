@@ -12,9 +12,14 @@ app = Flask(__name__)
 CORS(app)
 
 # --- Model readiness state (English comments) ---
-MODEL_PATH = "model/help_model.h5"
+MODEL_PATH = "model/help_model.keras"
+ATTENTION_MODEL_PATH = "model/help_model_attention.keras"
+
 _model_loaded = False
 _model_error = None
+
+_attention_model_loaded = False
+_attention_model_error = None
 
 
 def _load_model_once():
@@ -103,7 +108,7 @@ def predict():
                 print("Predict - prediction")
 
                 # Predicts the output
-                prediction = model.predict("model/help_model.h5", "model/selectedfeatures.csv", df)
+                prediction = model.predict("model/help_model.keras", "model/selectedfeatures.csv", df)
 
                 # Round the prediction to integers
                 prediction_int = np.rint(prediction)
@@ -130,4 +135,4 @@ def predict():
 
 
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=8080)
+    app.run(debug=False, host="0.0.0.0", port=8000)

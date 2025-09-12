@@ -20,11 +20,11 @@ ADD repository repository
 ADD lib lib
 COPY app.py app.py
 
-EXPOSE 8080
+EXPOSE 8000
 
 # Docker healthcheck probing GET /health; curl -f falla si HTTP>=400 (503 cuando no listo)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -fsS http://localhost:8080/health > /dev/null || exit 1
+  CMD curl -fsS http://localhost:8000/health > /dev/null || exit 1
 
 # Start with Gunicorn in production
-CMD [ "gunicorn", "-b", "0.0.0.0:8080", "app:app" ]
+CMD [ "gunicorn", "-b", "0.0.0.0:8000", "app:app" ]

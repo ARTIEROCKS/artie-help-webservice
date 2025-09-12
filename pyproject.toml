@@ -11,15 +11,14 @@ requires-python = ">=3.11"
 authors = [
   { name = "ARTIE Team" }
 ]
-license = { text = "UNLICENSED" }
+license = { file = "LICENSE" }
 keywords = ["flask", "tensorflow", "keras", "ml"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Framework :: Flask",
-  "License :: Other/Proprietary License",
+  "License :: OSI Approved :: MIT License",
 ]
 
 [project.urls]
 Homepage = "https://example.com"
-

@@ -1,17 +1,17 @@
 # Help Webservice
 
-Flask service for inference of a help recommendation model (help_model.h5/.keras), with prediction and health endpoints, ready for Python 3.11 and Docker.
+Flask service for inference of a help recommendation model (help_model.keras), with prediction and health endpoints, ready for Python 3.11 and Docker.
 
 ## Features
 - Python 3.11, Flask 3.
 - TensorFlow/Keras 2.15 with custom layers registered in `lib/keras_custom_layers.py`.
 - Endpoints:
-  - `GET /health` — returns OK only when the model `model/help_model.h5` was successfully loaded at startup.
+  - `GET /health` — returns OK only when the model `model/help_model.keras` was successfully loaded at startup.
   - `POST /api/v1/help-model/predict` — receives student interactions and returns whether help should be shown.
 - Dockerfile includes a native HEALTHCHECK that probes `/health`.
 
 ## Requirements
-- Model file at `model/help_model.h5` (present in the repo; `.keras` variants are also included).
+- Model file at `model/help_model.keras`.
 - Python 3.11 (for local runs) or Docker.
 - For the prediction endpoint: access to MongoDB and environment variables set.
 
@@ -42,12 +42,12 @@ docker build -t help-webservice .
 2) Run the container
 - Health-only (Mongo not required):
 ```bash
-docker run -d --name help-webservice -p 8080:8080 help-webservice
+docker run -d --name help-webservice -p 8000:8000 help-webservice
 ```
 - With prediction (requires Mongo and env vars):
 ```bash
 docker run -d --name help-webservice \
-  -p 8080:8080 \
+  -p 8000:8000 \
   -e APP_MONGO_HOST=host.docker.internal \
   -e APP_MONGO_PORT=27017 \
   -e APP_MONGO_USER=myuser \
@@ -57,7 +57,7 @@ docker run -d --name help-webservice \
 ```
 3) Probe health
 ```bash
-curl -i http://localhost:8080/health
+curl -i http://localhost:8000/health
 ```
 You should get `200 {"status":"ok"}` once the model is loaded.
 
@@ -86,18 +86,18 @@ python app.py
 ```
 4) Probe health
 ```bash
-curl -i http://localhost:8080/health
+curl -i http://localhost:8000/health
 ```
 
 ### Debug mode (local)
 Use Flask’s debug server with live reload:
 ```bash
 export FLASK_APP=app.py
-flask --app app --debug run -h 0.0.0.0 -p 8080
+flask --app app --debug run -h 0.0.0.0 -p 8000
 ```
 If you see the model loading twice on startup (due to the reloader), run without the reloader:
 ```bash
-flask --app app --debug run --no-reload -h 0.0.0.0 -p 8080
+flask --app app --debug run --no-reload -h 0.0.0.0 -p 8000
 ```
 
 ## Prediction API
@@ -107,7 +107,7 @@ flask --app app --debug run --no-reload -h 0.0.0.0 -p 8080
 
 Example:
 ```bash
-curl -s -X POST http://localhost:8080/api/v1/help-model/predict \
+curl -s -X POST http://localhost:8000/api/v1/help-model/predict \
   -H 'Content-Type: application/json' \
   -d '[{
     "student": {"id": "S1"},
@@ -135,7 +135,7 @@ repository/
 lib/
   keras_custom_layers.py   # Registered custom Keras layers/functions
 model/
-  help_model.h5            # Default model
+  help_model.keras         # Default model
   selectedfeatures.csv     # CSV with expected input columns
 ```
 
@@ -148,9 +148,12 @@ model/
 ## Troubleshooting
 - `ImportError: cannot import name 'formatargspec' from 'inspect'` — use `wrapt==1.14.1` (already pinned) instead of older versions.
 - Build failures for `grpcio` or `PyYAML` — the pinned versions ship wheels for Py3.11.
-- `/health` returns 503 — ensure `model/help_model.h5` exists and is readable; check container logs or console.
+- `/health` returns 503 — ensure `model/help_model.keras` exists and is readable; check container logs or console.
 - Prediction fails due to DB connection — export Mongo env vars and ensure the instance is reachable.
 
 ## pyproject.toml (modern build)
 - Declares the modern build system (`setuptools` + `wheel`) and basic project metadata for Python >= 3.11.
 - Runtime dependencies remain in `requirements.txt` for simple pip/Docker flows. You can migrate to declarative dependencies in `pyproject.toml` later if desired.
+
+## License
+This project is licensed under the MIT License. See the LICENSE file for details.

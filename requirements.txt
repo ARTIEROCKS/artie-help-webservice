@@ -45,16 +45,18 @@ rich==13.7.0
 rsa==4.7.2
 scipy==1.11.4
 six==1.16.0
-tensorboard==2.15.0
-tensorboard-data-server==0.7.2
-tensorflow==2.15.0
-tensorflow-estimator==2.15.0
-tensorflow-io-gcs-filesystem==0.34.0
+# TensorFlow selection by platform
+# Linux and other non-macOS
+tensorflow==2.15.0; platform_system != "Darwin"
+# macOS universal (Intel/Apple Silicon); pip will pick the right wheel
+tensorflow-macos==2.15.0; platform_system == "Darwin"
+# Enable Metal on Apple Silicon for performance (optional on Intel)
+tensorflow-metal==1.1.0; platform_system == "Darwin" and platform_machine == "arm64"
 termcolor==1.1.0
 typing-extensions==4.12.2
 tzdata==2023.3
 urllib3==1.26.6
 Werkzeug==3.0.1
-wrapt==1.12.1
+wrapt==1.14.1
 zipp==3.17.0
 h5py==3.10.0

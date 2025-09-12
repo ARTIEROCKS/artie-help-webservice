@@ -4,8 +4,9 @@ from flask_cors import CORS
 from service import preprocess, model, queue_service  # restored queue_service import
 import numpy as np
 import logging
-import tensorflow as tf  # added for early model load
+import tensorflow as tf
 import os
+from lib.keras_custom_layers import *
 
 app = Flask(__name__)
 CORS(app)
@@ -25,8 +26,20 @@ def _load_model_once():
         if not os.path.exists(MODEL_PATH):
             _model_error = f"Model file not found at {MODEL_PATH}"
             return
-        # Attempt to load (discard the object; predict() will still use existing logic)
-        tf.keras.saving.load_model(MODEL_PATH)
+
+        # Build custom objects map (in case registry is not enough)
+        custom_objects = {
+            'compute_mask_layer': compute_mask_layer,
+            'squeeze_last_axis_func': squeeze_last_axis_func,
+            'mask_attention_scores_func': mask_attention_scores_func,
+            'apply_attention_func': apply_attention_func,
+            'MaskedRepeatVector': MaskedRepeatVector,
+            'AttentionLayer': AttentionLayer,
+        }
+
+        # Load once for readiness (discard instance; actual prediction loads in service/model)
+        tf.keras.models.load_model(MODEL_PATH, custom_objects=custom_objects, compile=False)
+
         _model_loaded = True
         _model_error = None
     except Exception as ex:
@@ -113,7 +126,8 @@ def predict():
         print("API Rest response: " + str(help_object))
 
         return help_object
+    return None
 
 
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port="8080")
+    app.run(debug=False, host="0.0.0.0", port=8080)

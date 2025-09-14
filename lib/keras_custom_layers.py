@@ -1,138 +1,176 @@
+# python
+# Archivo: 'lib/keras_custom_layers.py'
 import tensorflow as tf
-from tensorflow.keras import layers
+from keras import layers
+from keras.saving import register_keras_serializable
 
-@tf.keras.utils.register_keras_serializable(package="Custom")
+@register_keras_serializable(package="Custom")
 def compute_mask_layer(mask_value):
-    def func(inp):
+    def _fn(inp):
         return tf.cast(tf.reduce_any(inp != mask_value, axis=-1), tf.float32)
-    return func
+    return _fn
 
-@tf.keras.utils.register_keras_serializable(package="Custom")
+# Alias exacto que la Lambda guardada espera ('func').
+# IMPORTANTE: ajusta el último dim (15) si tu modelo usa otro número de features.
+@register_keras_serializable(package="Custom", name="func")
+def func(inp):
+    # Mismo comportamiento que el de entrenamiento: máscara por último eje != 0.0
+    return tf.cast(tf.reduce_any(inp != 0.0, axis=-1), tf.float32)
+
+@register_keras_serializable(package="Custom")
 def squeeze_last_axis_func(t):
     return tf.squeeze(t, axis=-1)
 
-@tf.keras.utils.register_keras_serializable(package="Custom")
+@register_keras_serializable(package="Custom")
 def mask_attention_scores_func(inputs):
     scores, mask = inputs
     minus_inf = -1e9
     return scores + (1.0 - mask) * minus_inf
 
-@tf.keras.utils.register_keras_serializable(package="Custom")
+@register_keras_serializable(package="Custom")
 def apply_attention_func(inputs):
     x, attn = inputs
     return x * tf.expand_dims(attn, axis=-1)
 
-@tf.keras.utils.register_keras_serializable(package="Custom")
-class MaskedRepeatVector(tf.keras.layers.Layer):
-    def __init__(self, n, **kwargs):
-        super(MaskedRepeatVector, self).__init__(**kwargs)
-        self.n = n
+# Funciones con especificación explícita de output_shape
+@register_keras_serializable(package="Custom")
+class SqueezeLastAxisLayer(layers.Layer):
+    """Custom layer para squeeze que reemplaza la Lambda problemática"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.supports_masking = True
 
-    def call(self, inputs, mask=None):
-        # Standard repeat behavior
-        outputs = tf.keras.backend.repeat(inputs, self.n)
+    def call(self, inputs, **kwargs):
+        return tf.squeeze(inputs, axis=-1)
 
-        # If we have a mask, we need to repeat it as well
+    def compute_output_shape(self, input_shape):
+        if input_shape[-1] == 1:
+            return input_shape[:-1]
+        return input_shape
+
+    def get_config(self):
+        return super().get_config()
+
+@register_keras_serializable(package="Custom")
+class ComputeMaskLayer(layers.Layer):
+    """Custom layer para compute mask que reemplaza la Lambda problemática"""
+    def __init__(self, mask_value=0.0, **kwargs):
+        super().__init__(**kwargs)
+        self.mask_value = mask_value
+        self.supports_masking = True
+
+    def call(self, inputs, **kwargs):
+        return tf.cast(tf.reduce_any(inputs != self.mask_value, axis=-1), tf.float32)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[:-1]  # Remove the last dimension
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({'mask_value': self.mask_value})
+        return config
+
+@register_keras_serializable(package="Custom")
+class MaskAttentionScoresLayer(layers.Layer):
+    """Custom layer para mask attention scores que reemplaza la Lambda problemática"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.supports_masking = True
+
+    def call(self, inputs, **kwargs):
+        scores, mask = inputs
+        minus_inf = -1e9
+        return scores + (1.0 - mask) * minus_inf
+
+    def compute_output_shape(self, input_shapes):
+        scores_shape, mask_shape = input_shapes
+        return scores_shape
+
+    def get_config(self):
+        return super().get_config()
+
+@register_keras_serializable(package="Custom")
+class ApplyAttentionLayer(layers.Layer):
+    """Custom layer para apply attention que reemplaza la Lambda problemática"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.supports_masking = True
+
+    def call(self, inputs, **kwargs):
+        x, attn = inputs
+        return x * tf.expand_dims(attn, axis=-1)
+
+    def compute_output_shape(self, input_shapes):
+        x_shape, attn_shape = input_shapes
+        return x_shape
+
+    def get_config(self):
+        return super().get_config()
+
+@register_keras_serializable(package="Custom")
+class MaskedRepeatVector(layers.Layer):
+    def __init__(self, n, **kwargs):
+        super().__init__(**kwargs)
+        self.n = int(n)
+        self.supports_masking = True
+        self._mask = None
+
+    def call(self, inputs, mask=None):
+        outputs = tf.repeat(tf.expand_dims(inputs, axis=1), repeats=self.n, axis=1)
         if mask is not None:
-            # The repeated mask will be True for all time steps if the original was True
-            # This maintains the mask pattern across the repeated dimension
-            self._mask = tf.keras.backend.repeat(tf.expand_dims(mask, axis=1), self.n)
+            mask = tf.cast(mask, tf.bool)
+            self._mask = tf.repeat(tf.expand_dims(mask, axis=1), repeats=self.n, axis=1)
         return outputs
 
     def compute_mask(self, inputs, mask=None):
-        # Return the repeated mask
-        if mask is None:
-            return None
-        return self._mask
+        return self._mask if mask is not None else None
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0], self.n, input_shape[1])
 
     def get_config(self):
-        config = {'n': self.n}
-        base_config = super(MaskedRepeatVector, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        cfg = super().get_config()
+        cfg.update({"n": self.n})
+        return cfg
 
-@tf.keras.utils.register_keras_serializable(package="Custom")
-class AttentionLayer(tf.keras.layers.Layer):
+@register_keras_serializable(package="Custom")
+class AttentionLayer(layers.Layer):
     def __init__(self, **kwargs):
-        super(AttentionLayer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.supports_masking = True
+        self.W = None
+        self.b = None
+        self.u = None
 
     def build(self, input_shape):
-        # Create trainable weights for attention mechanism
-        self.W = self.add_weight(name="attention_weight",
-                                 shape=(input_shape[-1], 128),
-                                 initializer="glorot_uniform",
-                                 trainable=True)
-        self.b = self.add_weight(name="attention_bias",
-                                 shape=(128,),
-                                 initializer="zeros",
-                                 trainable=True)
-        self.u = self.add_weight(name="context_vector",
-                                 shape=(128, 1),
-                                 initializer="glorot_uniform",
-                                 trainable=True)
-        super(AttentionLayer, self).build(input_shape)
+        d = int(input_shape[-1])
+        self.W = self.add_weight(
+            name="attention_weight", shape=(d, 128),
+            initializer="glorot_uniform", trainable=True
+        )
+        self.b = self.add_weight(
+            name="attention_bias", shape=(128,),
+            initializer="zeros", trainable=True
+        )
+        self.u = self.add_weight(
+            name="context_vector", shape=(128, 1),
+            initializer="glorot_uniform", trainable=True
+        )
+        super().build(input_shape)
 
     def call(self, inputs, mask=None):
-        # inputs shape: (batch_size, time_steps, features)
-        # Calculate attention hidden representation using tanh activation
-        uit = tf.keras.backend.tanh(tf.keras.backend.dot(inputs, self.W) + self.b)
-
-        # Calculate attention weights
-        ait = tf.keras.backend.dot(uit, self.u)
-        ait = tf.keras.backend.squeeze(ait, -1)  # Remove last dimension
-
-        # Apply mask if provided (for padded sequences)
+        uit = tf.tanh(tf.tensordot(inputs, self.W, axes=1) + self.b)  # (b,t,128)
+        ait = tf.tensordot(uit, self.u, axes=1)                        # (b,t,1)
+        ait = tf.squeeze(ait, -1)                                      # (b,t)
         if mask is not None:
-            # Cast the mask to floatX to avoid issues
-            mask = tf.keras.backend.cast(mask, tf.keras.backend.floatx())
-            # Add a very small negative number to masked positions
-            # This is more numerically stable than using -1e10
+            mask = tf.cast(mask, tf.float32)
             ait += -10000.0 * (1.0 - mask)
-
-        # Apply softmax to get normalized weights
-        ait = tf.keras.backend.softmax(ait)
-
-        # Reshape for multiplication
-        ait = tf.keras.backend.expand_dims(ait, axis=-1)
-
-        # Apply attention weights to input sequence
-        weighted_input = inputs * ait
-
-        # Sum over time dimension to get context vector
-        output = tf.keras.backend.sum(weighted_input, axis=1)
-
-        return output
+        attn = tf.nn.softmax(ait)                                      # (b,t)
+        attn = tf.expand_dims(attn, axis=-1)                           # (b,t,1)
+        return tf.reduce_sum(inputs * attn, axis=1)                    # (b,f)
 
     def compute_output_shape(self, input_shape):
-        # Output shape is (batch_size, features)
         return (input_shape[0], input_shape[2])
 
     def get_config(self):
-        # For serialization
-        config = super(AttentionLayer, self).get_config()
-        return config
-@tf.keras.utils.register_keras_serializable()
-def compute_mask_layer(mask_value):
-    def func(inp):
-        return tf.cast(tf.reduce_any(inp != mask_value, axis=-1), tf.float32)
-    return func
-
-@tf.keras.utils.register_keras_serializable()
-def squeeze_last_axis_func(t):
-    return tf.squeeze(t, axis=-1)
-
-@tf.keras.utils.register_keras_serializable()
-def mask_attention_scores_func(inputs):
-    scores, mask = inputs
-    minus_inf = -1e9
-    return scores + (1.0 - mask) * minus_inf
-
-@tf.keras.utils.register_keras_serializable()
-def apply_attention_func(inputs):
-    x, attn = inputs
-    return x * tf.expand_dims(attn, axis=-1)
-
+        return super().get_config()

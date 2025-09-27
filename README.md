@@ -1,9 +1,9 @@
 # Help Webservice
 
-Flask service for inference of a help recommendation model (help_model.keras), with prediction and health endpoints, ready for Python 3.11 and Docker.
+FastAPI service for inference of a help recommendation model (help_model.keras), with prediction and health endpoints, ready for Python 3.11 and Docker.
 
 ## Features
-- Python 3.11, Flask 3.
+- Python 3.11, FastAPI.
 - TensorFlow/Keras 2.15 with custom layers registered in `lib/keras_custom_layers.py`.
 - Endpoints:
   - `GET /health` — returns OK only when the model `model/help_model.keras` was successfully loaded at startup.

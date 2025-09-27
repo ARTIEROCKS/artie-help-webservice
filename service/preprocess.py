@@ -129,7 +129,7 @@ def write_pedagogical_software_interventions_df(interventions, first_actions):
             if 'skills' in element['exercise']:
                 for skill in element['exercise']['skills']:
                     if skill['name'] == 'Paralelismo':
-                        exercise_skill_paralellism = skill['score']
+                        exercise_skill_parallelism = skill['score']
                     elif skill['name'] == 'Pensamiento lógico':
                         exercise_skill_logical_thinking = skill['score']
                     elif skill['name'] == 'Control de flujo':
@@ -141,7 +141,7 @@ def write_pedagogical_software_interventions_df(interventions, first_actions):
                     elif skill['name'] == 'Abstracción':
                         exercise_skill_abstraction = skill['score']
                     elif skill['name'] == 'Sincronización':
-                        exercise_skill_syncronization = skill['score']
+                        exercise_skill_synchronization = skill['score']
             if 'level' in element['exercise']:
                 exercise_level = element['exercise']['level']
 
@@ -159,13 +159,13 @@ def write_pedagogical_software_interventions_df(interventions, first_actions):
              'student_mother_tongue': student_mother_tongue,
              'student_age': student_age,
              'student_competence': student_competence,
-             'exercise_skill_paralellism': exercise_skill_paralellism,
+             'exercise_skill_parallelism': exercise_skill_parallelism,
              'exercise_skill_logical_thinking': exercise_skill_logical_thinking,
              'exercise_skill_flow_control': exercise_skill_flow_control,
              'exercise_skill_user_interactivity': exercise_skill_user_interactivity,
              'exercise_skill_information_representation': exercise_skill_information_representation,
              'exercise_skill_abstraction': exercise_skill_abstraction,
-             'exercise_skill_syncronization': exercise_skill_syncronization,
+             'exercise_skill_synchronization': exercise_skill_synchronization,
              'exercise_level': exercise_level,
              'solution_distance_total_distance': solution_distance_total_distance,
              'seconds_help_open': seconds_help_open,

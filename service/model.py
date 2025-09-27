@@ -24,5 +24,5 @@ def predict(model_url, selected_features_file, x):
     data_np = np.reshape(data_np, (1, data_np.shape[0], data_np.shape[1]))
 
     # 2 - Loads the model and predicts the result
-    model = tf.keras.saving.load_model(model_url)
+    model = tf.keras.models.load_model(model_url, compile=False)
     return model.predict(data_np, batch_size=1)

@@ -1,81 +1,177 @@
-from flask import Flask
-from flask import request
-from flask_cors import CORS
-from service import preprocess, model, queue_service
+import os
+from datetime import datetime
+from typing import List, Any, Dict
+
 import numpy as np
-import logging
+import pandas as pd
+from fastapi import FastAPI, HTTPException, Request
+import tensorflow as tf
 
-app = Flask(__name__)
-CORS(app)
+# Ruta del modelo (ajústala si lo guardas en otra ubicación)
+MODEL_PATH = os.getenv("HELP_MODEL_PATH", "model/help_model.keras")
+THRESHOLD = float(os.getenv("HELP_MODEL_THRESHOLD", "0.5"))
 
+# Orden exacto de columnas esperadas (15, ver entrenamiento)
+FEATURE_ORDER = [
+    "student_sex",
+    "student_mother_tongue",
+    "student_age",
+    "student_competence",
+    "exercise_skill_parallelism",
+    "exercise_skill_logical_thinking",
+    "exercise_skill_flow_control",
+    "exercise_skill_user_interactivity",
+    "exercise_skill_information_representation",
+    "exercise_skill_abstraction",
+    "exercise_skill_synchronization",
+    "exercise_level",
+    "solution_distance_total_distance",
+    "seconds_help_open",
+    "total_seconds",
+]
 
-@app.route('/api/v1/help-model/predict', methods=['POST'])
-def predict():
-    if request.method == "POST":
+APTED_COLUMNS = ["apted_distance", "tree_grade"]
+SKILL_NAME_MAP = {
+    "Paralelismo": "exercise_skill_parallelism",
+    "Pensamiento lógico": "exercise_skill_logical_thinking",
+    "Control de flujo": "exercise_skill_flow_control",
+    "Interactividad con el usuario": "exercise_skill_user_interactivity",
+    "Representación de la información": "exercise_skill_information_representation",
+    "Abstracción": "exercise_skill_abstraction",
+    "Sincronización": "exercise_skill_synchronization",
+}
 
-        logging.info("New help model prediction requested by API REST")
-        print("New help model prediction requested by API REST")
+app = FastAPI(title="HelpModel WebService", version="1.0.0")
 
-        error_message = ""
-        student_interactions = None
-        df = None
-        prediction_int = None
+# Cargar el modelo al arrancar
+try:
+    model = tf.keras.models.load_model(MODEL_PATH, compile=False, safe_mode=False)
+except Exception as e:
+    model = None
+    print(f"[ERROR] No se pudo cargar el modelo en el arranque: {e}")
 
+@app.get("/health")
+def health():
+    status = "ok" if model is not None else "model_not_loaded"
+    return {"status": status}
+
+def parse_datetime(dt_str: str) -> datetime:
+    # Normalizar varias formas con microsegundos o sin ellos
+    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
         try:
+            return datetime.strptime(dt_str, fmt)
+        except Exception:
+            continue
+    # Intento con pandas (más flexible)
+    try:
+        return pd.to_datetime(dt_str).to_pydatetime()
+    except Exception:
+        return None
 
-            logging.info("Predict - get_student_interactions")
-            print("Predict - get_student_interactions")
+def transform_sequence(payload: List[Dict[str, Any]]) -> np.ndarray:
+    if not isinstance(payload, list) or len(payload) == 0:
+        raise ValueError("El body debe ser un array no vacío de interacciones")
 
-            # Get the data and searches for the student interactions
-            elements = request.data
-            student_interactions, client = queue_service.get_student_interactions(elements)
-        except Exception as ex:
-            error_message = "Error: Predict - get_student_interactions: " + str(ex)
-            logging.error(error_message)
-            print(error_message)
+    rows = []
+    # Ordenar por dateTime (si viene desordenado)
+    sorted_payload = sorted(payload, key=lambda x: x.get("dateTime", ""))
 
-        try:
-            if student_interactions is not None:
-                logging.info("Predict - data_transformation")
-                print("Predict - data_transformation")
+    # Calcular total_seconds respecto a la primera acción
+    first_dt = None
+    for item in sorted_payload:
+        dt = parse_datetime(item.get("dateTime")) if item.get("dateTime") else None
+        if dt is not None:
+            first_dt = dt
+            break
 
-                # Once we have the interactions of the student, we transform the data to get a valid array
-                df = preprocess.data_transformation(student_interactions["interactions"])
-        except Exception as ex:
-            error_message = error_message + " | Error: Predict - data_transformation: " + str(ex)
-            logging.error(error_message)
-            print(error_message)
+    for item in sorted_payload:
+        row = {col: 0.0 for col in FEATURE_ORDER}
 
-        try:
-            if df is not None:
-                logging.info("Predict - prediction")
-                print("Predict - prediction")
+        # Student: gender -> sex; motherTongue, age, competence
+        student = item.get("student", {}) or {}
+        if "gender" in student:
+            row["student_sex"] = float(student.get("gender") or 0)
+        if "motherTongue" in student:
+            row["student_mother_tongue"] = float(student.get("motherTongue") or 0)
+        if "age" in student:
+            row["student_age"] = float(student.get("age") or 0)
+        if "competence" in student:
+            row["student_competence"] = float(student.get("competence") or 0)
+        # motivation no se usa en features finales
 
-                # Predicts the output
-                prediction = model.predict("model/help_model.h5", "model/selectedfeatures.csv", df)
+        # Exercise: skills y level
+        exercise = item.get("exercise", {}) or {}
+        skills = exercise.get("skills", []) or []
+        for s in skills:
+            name = s.get("name")
+            score = float(s.get("score") or 0.0)
+            col = SKILL_NAME_MAP.get(name)
+            if col:
+                row[col] = score
+        if "level" in exercise:
+            row["exercise_level"] = float(exercise.get("level") or 0)
 
-                # Round the prediction to integers
-                prediction_int = np.rint(prediction)
-        except Exception as ex:
-            error_message = error_message + " | Error: Predict - prediction: " + str(ex)
-            logging.error(error_message)
-            print(error_message)
+        # Distancias ARTIE: totalDistance
+        solution_distance = item.get("solutionDistance", {}) or {}
+        if "totalDistance" in solution_distance:
+            row["solution_distance_total_distance"] = float(solution_distance.get("totalDistance") or 0.0)
 
-        if prediction_int is not None:
+        # seconds_help_open
+        if "secondsHelpOpen" in item:
+            row["seconds_help_open"] = float(item.get("secondsHelpOpen") or 0.0)
 
-            # Searches if the help must be shown
-            help_needed = 1 in prediction_int
-            help_object = "{\"body\": {\"message\": \"OK\", \"object\": " + str(int(help_needed)) + "}}"
-
+        # total_seconds: diferencia respecto a first_dt
+        current_dt = parse_datetime(item.get("dateTime")) if item.get("dateTime") else None
+        if first_dt is not None and current_dt is not None:
+            row["total_seconds"] = max(0.0, (current_dt - first_dt).total_seconds())
         else:
-            # If there are no predictions, we return the errors
-            help_object = "{\"body\": {\"message\": \"ERROR\", \"object\": \"" + error_message + "\"}}"
+            row["total_seconds"] = 0.0
 
-        logging.info("API Rest response: " + str(help_object))
-        print("API Rest response: " + str(help_object))
+        # Eliminar columnas de APTED si existieran (aquí no forman parte de FEATURE_ORDER)
+        for c in APTED_COLUMNS:
+            if c in row:
+                row.pop(c, None)
 
-        return help_object
+        # Mantener solo las columnas en el orden esperado
+        rows.append([row[c] for c in FEATURE_ORDER])
 
+    # Salida (1, T, F)
+    X = np.array(rows, dtype=np.float32)
+    X = np.expand_dims(X, axis=0)
+    return X
+
+@app.post("/api/v1/help-model/predict")
+async def predict(request: Request):
+    global model
+    if model is None:
+        # Reintentar cargar si falló al inicio
+        try:
+            model = tf.keras.models.load_model(MODEL_PATH, compile=False, safe_mode=False)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"No se pudo cargar el modelo: {e}")
+
+    try:
+        payload = await request.json()
+        X = transform_sequence(payload)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Entrada inválida: {e}")
+
+    try:
+        # Predicción por paso temporal (return_sequences=True en entrenamiento)
+        preds = model.predict(X, verbose=0).astype(float).reshape(-1)
+        # Tomamos la última prob. como la “actual”
+        last_prob = float(preds[-1]) if preds.size > 0 else 0.0
+        help_needed = bool(last_prob >= THRESHOLD)
+        return {
+            "message": "OK",
+            "threshold": THRESHOLD,
+            "help_needed": help_needed,
+            "last_probability": last_prob,
+            "sequence_probabilities": preds.tolist()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al predecir: {e}")
 
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port="5000")
+    import uvicorn
+    uvicorn.run("app:app", host="0.0.0.0", port=8000)

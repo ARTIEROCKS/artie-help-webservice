@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "help-webservice"
+version = "0.1.0"
+description = "Web service for help model predictions"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  { name = "ARTIE Team" }
+]
+license = { file = "LICENSE" }
+keywords = ["flask", "tensorflow", "keras", "ml"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Framework :: Flask",
+  "License :: OSI Approved :: MIT License",
+]
+
+[project.urls]
+Homepage = "https://example.com"

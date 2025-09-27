@@ -66,34 +66,22 @@ def write_pedagogical_software_interventions_df(interventions, first_actions):
 
     for element in interventions:
 
-        student_gender = None
+        student_sex = None
         student_age = None
         total_seconds = None
         student_mother_tongue = 0
         student_competence = 0
-        student_motivation = 0
 
-        exercise_skill_paralellism = 0
+        exercise_skill_parallelism = 0
         exercise_skill_logical_thinking = 0
         exercise_skill_flow_control = 0
         exercise_skill_user_interactivity = 0
         exercise_skill_information_representation = 0
         exercise_skill_abstraction = 0
-        exercise_skill_syncronization = 0
-        exercise_valid_solution = 0
+        exercise_skill_synchronization = 0
         exercise_level = 0
-        solution_distance_family_distance = 0
-        solution_distance_element_distance = 0
-        solution_distance_position_distance = 0
-        solution_distance_input_distance = 0
         solution_distance_total_distance = 0
         seconds_help_open = 0
-        valid_solution = 0
-        grade = 0
-
-        exercise_is_evaluation = False
-        request_help = False
-        finished_exercise = False
 
         student_id = None
         exercise_id = None
@@ -128,15 +116,13 @@ def write_pedagogical_software_interventions_df(interventions, first_actions):
         # Student information
         if 'student' in element:
             if 'gender' in element['student']:
-                student_gender = element['student']['gender']
+                student_sex = element['student']['gender']
             if 'age' in element['student']:
                 student_age = element['student']['age']
             if 'motherTongue' in element['student']:
                 student_mother_tongue = element['student']['motherTongue']
             if 'competence' in element['student']:
                 student_competence = element['student']['competence']
-            if 'motivation' in element['student']:
-                student_motivation = element['student']['motivation']
 
         # Exercise information
         if 'exercise' in element:
@@ -156,44 +142,23 @@ def write_pedagogical_software_interventions_df(interventions, first_actions):
                         exercise_skill_abstraction = skill['score']
                     elif skill['name'] == 'Sincronización':
                         exercise_skill_syncronization = skill['score']
-            if 'valid_solution' in element['exercise']:
-                exercise_valid_solution = element['exercise']['valid_solution']
-            if 'isEvaluation' in element['exercise']:
-                exercise_is_evaluation = element['exercise']['isEvaluation']
             if 'level' in element['exercise']:
                 exercise_level = element['exercise']['level']
 
         # Solution distance information
         if 'solutionDistance' in element:
-            if 'familyDistance' in element['solutionDistance']:
-                solution_distance_family_distance = element['solutionDistance']['familyDistance']
-            if 'elementDistance' in element['solutionDistance']:
-                solution_distance_element_distance = element['solutionDistance']['elementDistance']
-            if 'positionDistance' in element['solutionDistance']:
-                solution_distance_position_distance = element['solutionDistance']['positionDistance']
-            if 'inputDistance' in element['solutionDistance']:
-                solution_distance_input_distance = element['solutionDistance']['inputDistance']
             if 'totalDistance' in element['solutionDistance']:
                 solution_distance_total_distance = element['solutionDistance']['totalDistance']
 
-        if 'requestHelp' in element:
-            request_help = element['requestHelp']
         if 'secondsHelpOpen' in element:
             seconds_help_open = element['secondsHelpOpen']
-        if 'finishedExercise' in element:
-            finished_exercise = element['finishedExercise']
-        if 'validSolution' in element:
-            valid_solution = element['validSolution']
-        if 'grade' in element:
-            grade = element['grade']
 
         # Creating  the row of the csv
         df_list.append(
-            {'student_gender': student_gender,
+            {'student_sex': student_sex,
              'student_mother_tongue': student_mother_tongue,
              'student_age': student_age,
              'student_competence': student_competence,
-             'student_motivation': student_motivation,
              'exercise_skill_paralellism': exercise_skill_paralellism,
              'exercise_skill_logical_thinking': exercise_skill_logical_thinking,
              'exercise_skill_flow_control': exercise_skill_flow_control,
@@ -201,20 +166,11 @@ def write_pedagogical_software_interventions_df(interventions, first_actions):
              'exercise_skill_information_representation': exercise_skill_information_representation,
              'exercise_skill_abstraction': exercise_skill_abstraction,
              'exercise_skill_syncronization': exercise_skill_syncronization,
-             'exercise_valid_solution': exercise_valid_solution,
-             'exercise_is_evaluation': int(exercise_is_evaluation),
              'exercise_level': exercise_level,
-             'solution_distance_family_distance': solution_distance_family_distance,
-             'solution_distance_element_distance': solution_distance_element_distance,
-             'solution_distance_position_distance': solution_distance_position_distance,
-             'solution_distance_input_distance': solution_distance_input_distance,
              'solution_distance_total_distance': solution_distance_total_distance,
              'seconds_help_open': seconds_help_open,
-             'finished_exercise': int(finished_exercise),
-             'valid_solution': valid_solution,
-             'grade': grade,
-             'total_seconds': total_seconds,
-             'request_help': int(request_help)}
+             'total_seconds': total_seconds
+            }
         )
 
     return pd.DataFrame(df_list)

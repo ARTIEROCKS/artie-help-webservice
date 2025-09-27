@@ -12,7 +12,7 @@ import os
 import sys
 
 # Importar las capas personalizadas
-sys.path.append('/Users/luis/DOCTORADO/Software/ARTIE_WEB/help-webservice')
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from lib.keras_custom_layers import (
     compute_mask_layer,
     squeeze_last_axis_func,

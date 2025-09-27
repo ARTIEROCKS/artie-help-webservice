@@ -72,7 +72,7 @@ def write_pedagogical_software_interventions_df(interventions, first_actions):
         student_mother_tongue = 0
         student_competence = 0
 
-        exercise_skill_paralellism = 0
+        exercise_skill_parallelism = 0
         exercise_skill_logical_thinking = 0
         exercise_skill_flow_control = 0
         exercise_skill_user_interactivity = 0

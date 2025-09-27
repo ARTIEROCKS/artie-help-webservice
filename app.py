@@ -1,168 +1,177 @@
-# --- Archivo: tu servicio Flask (el que expone '/api/v1/help-model/predict')
-from flask import Flask, request
-from flask_cors import CORS
-from service import preprocess, queue_service
-import logging, os, threading, numpy as np, pandas as pd
-from keras import models as kmodels
-from lib.keras_custom_layers import (
-    compute_mask_layer,
-    squeeze_last_axis_func,
-    mask_attention_scores_func,
-    apply_attention_func,
-    MaskedRepeatVector,
-    AttentionLayer,
-    func,  # <- alias necesario para deserializar la Lambda
-    # Nuevas capas para reemplazar Lambdas problemáticas
-    SqueezeLastAxisLayer,
-    ComputeMaskLayer,
-    MaskAttentionScoresLayer,
-    ApplyAttentionLayer,
-)
+import os
+from datetime import datetime
+from typing import List, Any, Dict
 
-from keras.saving import register_keras_serializable
+import numpy as np
+import pandas as pd
+from fastapi import FastAPI, HTTPException, Request
+import tensorflow as tf
 
-# Registra funciones y capas personalizadas (si no estaban decoradas ya)
-compute_mask_layer = register_keras_serializable(package="Custom", name="compute_mask_layer")(compute_mask_layer)
-squeeze_last_axis_func = register_keras_serializable(package="Custom", name="squeeze_last_axis_func")(squeeze_last_axis_func)
-mask_attention_scores_func = register_keras_serializable(package="Custom", name="mask_attention_scores_func")(mask_attention_scores_func)
-apply_attention_func = register_keras_serializable(package="Custom", name="apply_attention_func")(apply_attention_func)
-MaskedRepeatVector = register_keras_serializable(package="Custom", name="MaskedRepeatVector")(MaskedRepeatVector)
-AttentionLayer = register_keras_serializable(package="Custom", name="AttentionLayer")(AttentionLayer)
+# Ruta del modelo (ajústala si lo guardas en otra ubicación)
+MODEL_PATH = os.getenv("HELP_MODEL_PATH", "model/help_model.keras")
+THRESHOLD = float(os.getenv("HELP_MODEL_THRESHOLD", "0.5"))
 
-# Alias retrocompatible para la Lambda guardada como 'func'
-# Cambia el destino si tu Lambda usaba otra función.
-func = squeeze_last_axis_func
-func.__name__ = "func"
-func = register_keras_serializable(package="Custom", name="func")(func)
+# Orden exacto de columnas esperadas (15, ver entrenamiento)
+FEATURE_ORDER = [
+    "student_sex",
+    "student_mother_tongue",
+    "student_age",
+    "student_competence",
+    "exercise_skill_parallelism",
+    "exercise_skill_logical_thinking",
+    "exercise_skill_flow_control",
+    "exercise_skill_user_interactivity",
+    "exercise_skill_information_representation",
+    "exercise_skill_abstraction",
+    "exercise_skill_synchronization",
+    "exercise_level",
+    "solution_distance_total_distance",
+    "seconds_help_open",
+    "total_seconds",
+]
 
-app = Flask(__name__)
-CORS(app)
+APTED_COLUMNS = ["apted_distance", "tree_grade"]
+SKILL_NAME_MAP = {
+    "Paralelismo": "exercise_skill_parallelism",
+    "Pensamiento lógico": "exercise_skill_logical_thinking",
+    "Control de flujo": "exercise_skill_flow_control",
+    "Interactividad con el usuario": "exercise_skill_user_interactivity",
+    "Representación de la información": "exercise_skill_information_representation",
+    "Abstracción": "exercise_skill_abstraction",
+    "Sincronización": "exercise_skill_synchronization",
+}
 
-MODEL_PATH = "model/help_model.keras"
-SELECTED_FEATURES_PATH = "model/selectedfeatures.csv"  # Añadir la variable que faltaba
-_MODEL = None
-_MODEL_LOCK = threading.Lock()
-_MODEL_ERROR = None
+app = FastAPI(title="HelpModel WebService", version="1.0.0")
 
-def _get_custom_objects():
-    # Incluye 'func' explícitamente y las nuevas capas
-    return {
-        "compute_mask_layer": compute_mask_layer,
-        "squeeze_last_axis_func": squeeze_last_axis_func,
-        "mask_attention_scores_func": mask_attention_scores_func,
-        "apply_attention_func": apply_attention_func,
-        "MaskedRepeatVector": MaskedRepeatVector,
-        "AttentionLayer": AttentionLayer,
-        "func": func,
-        # Nuevas capas para reemplazar Lambdas problemáticas
-        "SqueezeLastAxisLayer": SqueezeLastAxisLayer,
-        "ComputeMaskLayer": ComputeMaskLayer,
-        "MaskAttentionScoresLayer": MaskAttentionScoresLayer,
-        "ApplyAttentionLayer": ApplyAttentionLayer,
-    }
+# Cargar el modelo al arrancar
+try:
+    model = tf.keras.models.load_model(MODEL_PATH, compile=False, safe_mode=False)
+except Exception as e:
+    model = None
+    print(f"[ERROR] No se pudo cargar el modelo en el arranque: {e}")
 
-def _load_model_once():
-    global _MODEL, _MODEL_ERROR
-    if _MODEL is not None:
-        return
-    if not os.path.exists(MODEL_PATH):
-        _MODEL_ERROR = f"Model file not found at {MODEL_PATH}"
-        return
-    with _MODEL_LOCK:
-        if _MODEL is not None:
-            return
+@app.get("/health")
+def health():
+    status = "ok" if model is not None else "model_not_loaded"
+    return {"status": status}
+
+def parse_datetime(dt_str: str) -> datetime:
+    # Normalizar varias formas con microsegundos o sin ellos
+    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
         try:
-            _MODEL = kmodels.load_model(
-                MODEL_PATH,
-                custom_objects=_get_custom_objects(),
-                compile=False,
-                safe_mode=False,  # necesario para código/funciones personalizados
-            )
-            _MODEL_ERROR = None
-        except Exception as ex:
-            _MODEL = None
-            _MODEL_ERROR = str(ex)
-
-def _read_selected_features():
-    if not os.path.exists(SELECTED_FEATURES_PATH):
-        return None
-    df_feat = pd.read_csv(SELECTED_FEATURES_PATH)
-    first_col = df_feat.columns[0]
-    return df_feat[first_col].astype(str).tolist()
-
-def _prepare_input_for_model(x):
-    _load_model_once()
-    if _MODEL is None:
-        raise RuntimeError(f"Model not ready: {_MODEL_ERROR}")
-    selected = _read_selected_features()
-    if isinstance(x, pd.DataFrame):
-        df = x.copy()
-        if selected:
-            for col in selected:
-                if col not in df.columns:
-                    df[col] = 0.0
-            X = df[selected].to_numpy(dtype=np.float32)
-        else:
-            X = df.to_numpy(dtype=np.float32)
-    else:
-        X = np.asarray(x, dtype=np.float32)
-    # Asegura dimensión batch
+            return datetime.strptime(dt_str, fmt)
+        except Exception:
+            continue
+    # Intento con pandas (más flexible)
     try:
-        input_rank = len(tuple(_MODEL.inputs[0].shape))
+        return pd.to_datetime(dt_str).to_pydatetime()
     except Exception:
-        input_rank = X.ndim + 1
-    if X.ndim == (input_rank - 1):
-        X = np.expand_dims(X, axis=0)
-    while X.ndim < (input_rank - 1):
-        X = np.expand_dims(X, axis=0)
+        return None
+
+def transform_sequence(payload: List[Dict[str, Any]]) -> np.ndarray:
+    if not isinstance(payload, list) or len(payload) == 0:
+        raise ValueError("El body debe ser un array no vacío de interacciones")
+
+    rows = []
+    # Ordenar por dateTime (si viene desordenado)
+    sorted_payload = sorted(payload, key=lambda x: x.get("dateTime", ""))
+
+    # Calcular total_seconds respecto a la primera acción
+    first_dt = None
+    for item in sorted_payload:
+        dt = parse_datetime(item.get("dateTime")) if item.get("dateTime") else None
+        if dt is not None:
+            first_dt = dt
+            break
+
+    for item in sorted_payload:
+        row = {col: 0.0 for col in FEATURE_ORDER}
+
+        # Student: gender -> sex; motherTongue, age, competence
+        student = item.get("student", {}) or {}
+        if "gender" in student:
+            row["student_sex"] = float(student.get("gender") or 0)
+        if "motherTongue" in student:
+            row["student_mother_tongue"] = float(student.get("motherTongue") or 0)
+        if "age" in student:
+            row["student_age"] = float(student.get("age") or 0)
+        if "competence" in student:
+            row["student_competence"] = float(student.get("competence") or 0)
+        # motivation no se usa en features finales
+
+        # Exercise: skills y level
+        exercise = item.get("exercise", {}) or {}
+        skills = exercise.get("skills", []) or []
+        for s in skills:
+            name = s.get("name")
+            score = float(s.get("score") or 0.0)
+            col = SKILL_NAME_MAP.get(name)
+            if col:
+                row[col] = score
+        if "level" in exercise:
+            row["exercise_level"] = float(exercise.get("level") or 0)
+
+        # Distancias ARTIE: totalDistance
+        solution_distance = item.get("solutionDistance", {}) or {}
+        if "totalDistance" in solution_distance:
+            row["solution_distance_total_distance"] = float(solution_distance.get("totalDistance") or 0.0)
+
+        # seconds_help_open
+        if "secondsHelpOpen" in item:
+            row["seconds_help_open"] = float(item.get("secondsHelpOpen") or 0.0)
+
+        # total_seconds: diferencia respecto a first_dt
+        current_dt = parse_datetime(item.get("dateTime")) if item.get("dateTime") else None
+        if first_dt is not None and current_dt is not None:
+            row["total_seconds"] = max(0.0, (current_dt - first_dt).total_seconds())
+        else:
+            row["total_seconds"] = 0.0
+
+        # Eliminar columnas de APTED si existieran (aquí no forman parte de FEATURE_ORDER)
+        for c in APTED_COLUMNS:
+            if c in row:
+                row.pop(c, None)
+
+        # Mantener solo las columnas en el orden esperado
+        rows.append([row[c] for c in FEATURE_ORDER])
+
+    # Salida (1, T, F)
+    X = np.array(rows, dtype=np.float32)
+    X = np.expand_dims(X, axis=0)
     return X
 
-# Carga temprana
-_load_model_once()
-
-@app.route('/health', methods=['GET'])
-def health():
-    if _MODEL is not None and _MODEL_ERROR is None:
-        return {"status": "ok"}, 200
-    return {"status": "not_ready", "error": _MODEL_ERROR}, 503
-
-@app.route('/api/v1/help-model/predict', methods=['POST'])
-def predict():
-    if request.method != "POST":
-        return None
-    logging.info("New help model prediction requested by API REST")
-
-    error_message = ""
-    prediction_int = None
-    try:
-        elements = request.data
-        student_interactions, client = queue_service.get_student_interactions(elements)
-    except Exception as ex:
-        error_message = "Error: Predict - get_student_interactions: " + str(ex)
-        student_interactions = None
+@app.post("/api/v1/help-model/predict")
+async def predict(request: Request):
+    global model
+    if model is None:
+        # Reintentar cargar si falló al inicio
+        try:
+            model = tf.keras.models.load_model(MODEL_PATH, compile=False, safe_mode=False)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"No se pudo cargar el modelo: {e}")
 
     try:
-        if student_interactions is not None:
-            df = preprocess.data_transformation(student_interactions["interactions"])
-        else:
-            df = None
-    except Exception as ex:
-        error_message = (error_message + " | " if error_message else "") + "Error: Predict - data_transformation: " + str(ex)
-        df = None
+        payload = await request.json()
+        X = transform_sequence(payload)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Entrada inválida: {e}")
 
     try:
-        if df is not None:
-            X = _prepare_input_for_model(df)
-            y_pred = _MODEL.predict(X, verbose=0)
-            prediction_int = np.rint(y_pred)
-    except Exception as ex:
-        error_message = (error_message + " | " if error_message else "") + "Error: Predict - prediction: " + str(ex)
-
-    if prediction_int is not None:
-        help_needed = 1 in prediction_int
-        return "{\"body\": {\"message\": \"OK\", \"object\": " + str(int(help_needed)) + "}}"
-    else:
-        return "{\"body\": {\"message\": \"ERROR\", \"object\": \"" + error_message + "\"}}"
+        # Predicción por paso temporal (return_sequences=True en entrenamiento)
+        preds = model.predict(X, verbose=0).astype(float).reshape(-1)
+        # Tomamos la última prob. como la “actual”
+        last_prob = float(preds[-1]) if preds.size > 0 else 0.0
+        help_needed = bool(last_prob >= THRESHOLD)
+        return {
+            "message": "OK",
+            "threshold": THRESHOLD,
+            "help_needed": help_needed,
+            "last_probability": last_prob,
+            "sequence_probabilities": preds.tolist()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al predecir: {e}")
 
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=8000)
+    import uvicorn
+    uvicorn.run("app:app", host="0.0.0.0", port=8000)

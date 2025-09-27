@@ -78,7 +78,7 @@ def write_pedagogical_software_interventions_df(interventions, first_actions):
         exercise_skill_user_interactivity = 0
         exercise_skill_information_representation = 0
         exercise_skill_abstraction = 0
-        exercise_skill_syncronization = 0
+        exercise_skill_synchronization = 0
         exercise_level = 0
         solution_distance_total_distance = 0
         seconds_help_open = 0

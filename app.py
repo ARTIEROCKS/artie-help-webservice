@@ -224,11 +224,13 @@ async def predict(request: Request):
 
         return {
             "message": "OK",
-            "threshold": THRESHOLD,
-            "help_needed": help_needed,
-            "last_probability": last_prob,
-            "sequence_probabilities": preds.tolist(),
-            "attention": attention,
+            "body": {
+                "threshold": THRESHOLD,
+                "help_needed": help_needed,
+                "last_probability": last_prob,
+                "sequence_probabilities": preds.tolist(),
+                "attention": attention,
+            }
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction error: {e}")

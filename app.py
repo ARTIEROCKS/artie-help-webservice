@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -9,7 +9,9 @@ import tensorflow as tf
 
 # Ruta del modelo (ajústala si lo guardas en otra ubicación)
 MODEL_PATH = os.getenv("HELP_MODEL_PATH", "model/help_model.keras")
+ATTENTION_MODEL_PATH = os.getenv("HELP_ATTENTION_MODEL_PATH", "model/help_model_attention.keras")
 THRESHOLD = float(os.getenv("HELP_MODEL_THRESHOLD", "0.5"))
+ATTENTION_TOPK = int(os.getenv("HELP_ATTENTION_TOPK", "5"))
 
 # Orden exacto de columnas esperadas (15, ver entrenamiento)
 FEATURE_ORDER = [
@@ -50,12 +52,26 @@ except Exception as e:
     model = None
     print(f"[ERROR] No se pudo cargar el modelo en el arranque: {e}")
 
+# Cargar el modelo de atención si existe
+attention_model = None
+try:
+    if os.path.exists(ATTENTION_MODEL_PATH):
+        attention_model = tf.keras.models.load_model(ATTENTION_MODEL_PATH, compile=False, safe_mode=False)
+    else:
+        print("[INFO] Modelo de atención no encontrado; no se incluirá atención en la respuesta")
+except Exception as e:
+    attention_model = None
+    print(f"[WARN] No se pudo cargar el modelo de atención: {e}")
+
+
 @app.get("/health")
 def health():
     status = "ok" if model is not None else "model_not_loaded"
-    return {"status": status}
+    att = "loaded" if attention_model is not None else "absent"
+    return {"status": status, "attention_model": att}
 
-def parse_datetime(dt_str: str) -> datetime:
+
+def parse_datetime(dt_str: str) -> Optional[datetime]:
     # Normalizar varias formas con microsegundos o sin ellos
     for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
         try:
@@ -67,6 +83,7 @@ def parse_datetime(dt_str: str) -> datetime:
         return pd.to_datetime(dt_str).to_pydatetime()
     except Exception:
         return None
+
 
 def transform_sequence(payload: List[Dict[str, Any]]) -> np.ndarray:
     if not isinstance(payload, list) or len(payload) == 0:
@@ -140,9 +157,19 @@ def transform_sequence(payload: List[Dict[str, Any]]) -> np.ndarray:
     X = np.expand_dims(X, axis=0)
     return X
 
+
+def _topk_weights(w: np.ndarray, k: int) -> List[Dict[str, float]]:
+    if w.size == 0:
+        return []
+    k = max(1, min(k, w.size))
+    idx = np.argpartition(-w, k - 1)[:k]
+    idx = idx[np.argsort(-w[idx])]
+    return [{"t": int(i), "w": float(w[i])} for i in idx]
+
+
 @app.post("/api/v1/help-model/predict")
 async def predict(request: Request):
-    global model
+    global model, attention_model
     if model is None:
         # Reintentar cargar si falló al inicio
         try:
@@ -162,12 +189,42 @@ async def predict(request: Request):
         # Tomamos la última prob. como la “actual”
         last_prob = float(preds[-1]) if preds.size > 0 else 0.0
         help_needed = bool(last_prob >= THRESHOLD)
+
+        # AtenCIÓN: calcular pesos si el submodelo está disponible
+        attention = {"available": False}
+        if attention_model is None and os.path.exists(ATTENTION_MODEL_PATH):
+            try:
+                attention_model = tf.keras.models.load_model(ATTENTION_MODEL_PATH, compile=False, safe_mode=False)
+            except Exception as e:
+                attention_model = None
+                print(f"[WARN] No se pudo cargar el modelo de atención bajo demanda: {e}")
+
+        if attention_model is not None:
+            try:
+                att = attention_model.predict(X, verbose=0)
+                # Normalizar forma -> (T,)
+                if att.ndim == 3 and att.shape[-1] == 1:
+                    att = att[0, :, 0]
+                elif att.ndim == 2:
+                    att = att[0, :]
+                else:
+                    att = np.array([], dtype=np.float32)
+                attention = {
+                    "available": True,
+                    "weights": att.astype(float).tolist(),
+                    "top_k": _topk_weights(att.astype(float), ATTENTION_TOPK),
+                    "seq_len": int(att.shape[0])
+                }
+            except Exception as e:
+                print(f"[WARN] Error al calcular atención: {e}")
+
         return {
             "message": "OK",
             "threshold": THRESHOLD,
             "help_needed": help_needed,
             "last_probability": last_prob,
-            "sequence_probabilities": preds.tolist()
+            "sequence_probabilities": preds.tolist(),
+            "attention": attention,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al predecir: {e}")
